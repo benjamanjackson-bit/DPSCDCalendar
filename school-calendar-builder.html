@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>School Calendar Builder</title>
+  <style>
+    :root {
+      --navy: #1a237e;
+      --navy-light: #283593;
+      --sidebar-w: 310px;
+      --header-h: 54px;
+      --status-h: 72px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 13px;
+      background: #f0f2f5;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ─────────────────────────────── */
+    .header {
+      height: var(--header-h);
+      background: var(--navy);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 20px;
+      flex-shrink: 0;
+      box-shadow: 0 2px 6px rgba(0,0,0,.35);
+      z-index: 10;
+    }
+    .header h1 { font-size: 17px; font-weight: 700; letter-spacing: .3px; }
+    .year-nav { display: flex; align-items: center; gap: 10px; margin-left: 12px; }
+    .year-nav button {
+      background: rgba(255,255,255,.2); border: none; color: #fff;
+      width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+      font-size: 18px; line-height: 1; display: flex; align-items: center; justify-content: center;
+      transition: background .15s;
+    }
+    .year-nav button:hover { background: rgba(255,255,255,.35); }
+    .year-nav .year-label { font-size: 15px; font-weight: 600; min-width: 110px; text-align: center; }
+
+    /* ── Main layout ─────────────────────────── */
+    .layout { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Sidebar ─────────────────────────────── */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: #fff;
+      border-right: 1px solid #ddd;
+      overflow-y: auto;
+      flex-shrink: 0;
+      padding-bottom: 12px;
+    }
+    .section { border-bottom: 1px solid #e8e8e8; }
+    .section-head {
+      padding: 10px 14px;
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: #555;
+      cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+      background: #f9f9f9; user-select: none;
+    }
+    .section-head:hover { background: #f0f0f0; }
+    .section-head .chevron { font-size: 11px; transition: transform .2s; color: #999; }
+    .section-head.open .chevron { transform: rotate(90deg); }
+    .section-body { padding: 10px 14px; }
+    .section-body.hidden { display: none; }
+
+    /* subsection divider within a section */
+    .sub-divider {
+      margin: 8px 0 8px;
+      border-top: 1px dashed #e0e0e0;
+      padding-top: 8px;
+    }
+    .sub-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .7px; color: #aaa; margin-bottom: 6px;
+    }
+
+    /* form controls */
+    .field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px; }
+    .field label { font-size: 11px; color: #666; font-weight: 600; }
+    .field input[type="date"], .field input[type="text"] {
+      padding: 5px 8px; border: 1px solid #ccc; border-radius: 5px;
+      font-size: 12px; width: 100%; color: #333;
+    }
+
+    /* switch toggle */
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; gap: 6px; }
+    .toggle-row .tl { flex: 1; }
+    .toggle-row .tl-name { font-size: 12px; color: #333; line-height: 1.3; }
+    .toggle-row .tl-date { font-size: 10px; color: #999; }
+    .sw { position: relative; width: 34px; height: 19px; flex-shrink: 0; }
+    .sw input { opacity: 0; width: 0; height: 0; }
+    .sw .knob {
+      position: absolute; inset: 0; background: #ccc; border-radius: 19px;
+      cursor: pointer; transition: background .2s;
+    }
+    .sw .knob::before {
+      content: ''; position: absolute; width: 13px; height: 13px;
+      left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform .2s;
+    }
+    .sw input:checked + .knob { background: var(--navy); }
+    .sw input:checked + .knob::before { transform: translateX(15px); }
+
+    /* PD Days */
+    .pd-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; }
+    .pd-item {
+      display: flex; align-items: flex-start; gap: 6px;
+      padding: 6px 8px; background: #fce4ec; border: 1px solid #f8bbd0; border-radius: 6px;
+    }
+    .pd-item .pd-info { flex: 1; }
+    .pd-item .pd-date { font-size: 11px; font-weight: 600; color: #333; }
+    .pd-item .pd-check { display: flex; align-items: center; gap: 4px; font-size: 10px; color: #666; margin-top: 2px; }
+    .pd-item .pd-del, .cl-del {
+      background: none; border: none; color: #c62828; cursor: pointer;
+      font-size: 17px; line-height: 1; padding: 0 1px; flex-shrink: 0;
+    }
+    .pd-item .pd-del:hover, .cl-del:hover { color: #e53935; }
+    .pd-note { font-size: 10px; color: #888; text-align: center; margin-top: 6px; }
+
+    /* Custom Closure lists (School Closed / District Closed) */
+    .cl-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; }
+    .cl-item {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 8px; border-radius: 6px;
+    }
+    .cl-item.sc { background: #ffebee; border: 1px solid #ffcdd2; }
+    .cl-item.dc { background: #fff3e0; border: 1px solid #ffe0b2; }
+    .cl-item .cl-info { flex: 1; }
+    .cl-item .cl-date-lbl { font-size: 11px; font-weight: 600; color: #333; }
+    .cl-item .cl-user-lbl { font-size: 10px; color: #777; }
+
+    /* shared add button + form */
+    .btn-add {
+      width: 100%; padding: 7px; background: var(--navy); color: #fff;
+      border: none; border-radius: 5px; cursor: pointer; font-size: 12px;
+      font-weight: 600; transition: background .15s;
+    }
+    .btn-add:hover { background: var(--navy-light); }
+    .add-form { margin-top: 8px; padding: 10px; background: #f5f5f5; border-radius: 6px; }
+    .add-form .field { margin-bottom: 6px; }
+    .add-btns { display: flex; gap: 6px; margin-top: 8px; }
+    .add-btns button {
+      flex: 1; padding: 6px; border: none; border-radius: 4px; cursor: pointer;
+      font-size: 12px; font-weight: 500;
+    }
+    .btn-confirm { background: var(--navy); color: #fff; }
+    .btn-cancel  { background: #e0e0e0; color: #333; }
+
+    /* Legend */
+    .legend { padding: 10px 14px 4px; }
+    .legend-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: #aaa; margin-bottom: 6px; }
+    .legend-item { display: flex; align-items: center; gap: 7px; padding: 2px 0; font-size: 11px; color: #555; }
+    .swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; border: 1px solid rgba(0,0,0,.12); }
+
+    /* warn box */
+    .warn-box {
+      background: #fff3e0; border: 1px solid #ffcc80; border-radius: 5px;
+      padding: 6px 10px; font-size: 11px; color: #e65100; margin-top: 8px;
+    }
+    .empty-msg { color: #bbb; font-size: 12px; text-align: center; padding: 8px 0; }
+
+    /* ── Calendar area ───────────────────────── */
+    .cal-area {
+      flex: 1; overflow-y: auto;
+      padding: 16px 16px calc(var(--status-h) + 16px);
+    }
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 14px;
+    }
+
+    /* Month block */
+    .month-block { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.1); overflow: hidden; }
+    .month-head {
+      background: var(--navy); color: #fff;
+      padding: 7px 11px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .month-name { font-size: 13px; font-weight: 700; }
+    .month-counts { text-align: right; }
+    .month-count-line { font-size: 10px; opacity: .85; line-height: 1.5; }
+    .month-body { padding: 7px; }
+    .dow-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; margin-bottom: 3px; }
+    .dow-cell { text-align: center; font-size: 9px; font-weight: 700; color: #bbb; padding: 1px 0; }
+    .dow-cell.we { color: #ddd; }
+    .dates-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
+    .day {
+      aspect-ratio: 1; border-radius: 3px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 500; position: relative; min-height: 26px;
+    }
+    .day .dn { font-size: 11px; line-height: 1; }
+    .day .dl { font-size: 7.5px; line-height: 1.2; text-align: center; max-width: 100%; overflow: hidden; white-space: nowrap; }
+
+    /* Day type colors */
+    .d-empty      { background: transparent; }
+    .d-out        { background: #f7f7f7; color: #ddd; }
+    .d-we         { background: #efefef; color: #ccc; }
+    .d-school     { background: #fff; border: 1px solid #e8e8e8; color: #333; }
+    .d-first      { background: #ffc000; color: #333; border: 1px solid #e6ac00; }
+    .d-last       { background: #ffc000; color: #333; border: 1px solid #e6ac00; }
+    .d-fed        { background: #ff9800; color: #fff; }
+    .d-rel        { background: #9c27b0; color: #fff; }
+    .d-break      { background: #42a5f5; color: #fff; }
+    .d-pd-yes     { background: #ff80c8; color: #fff; }
+    .d-pd-no      { background: #ff33cc; color: #fff; }
+    .d-teacher      { background: #e0f7fa; color: #006064; border: 1px solid #b2ebf2; }
+    .d-sch-closed { background: #ef5350; color: #fff; }
+    .d-dist-closed{ background: #e65100; color: #fff; }
+
+    /* ── Status bar ──────────────────────────── */
+    .status-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      height: var(--status-h);
+      background: #fff; border-top: 2px solid #e0e0e0;
+      display: flex; align-items: center; padding: 0 24px; gap: 16px;
+      box-shadow: 0 -2px 8px rgba(0,0,0,.1); z-index: 100;
+    }
+    .stat-divider { width: 1px; background: #e0e0e0; align-self: stretch; margin: 8px 4px; flex-shrink: 0; }
+    .stat-block { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
+    .stat-lbl { font-size: 10px; color: #aaa; text-transform: uppercase; letter-spacing: .5px; }
+    .stat-val { font-size: 22px; font-weight: 800; color: #333; line-height: 1.2; }
+    .stat-val.pass { color: #2e7d32; }
+    .stat-val.warn { color: #e65100; }
+    .stat-val.fail { color: #c62828; }
+    .stat-progress { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
+    .prog-bg { height: 10px; background: #e0e0e0; border-radius: 5px; overflow: hidden; }
+    .prog-fill { height: 100%; border-radius: 5px; transition: width .4s, background .4s; background: #2e7d32; }
+    .prog-fill.warn { background: #e65100; }
+    .prog-fill.fail { background: #c62828; }
+    .prog-labels { display: flex; justify-content: space-between; font-size: 10px; color: #bbb; }
+    .stat-icon { font-size: 26px; line-height: 1; flex-shrink: 0; }
+    .stat-msg { font-size: 12px; font-weight: 600; flex-shrink: 0; max-width: 160px; }
+    .stat-msg.pass { color: #2e7d32; }
+    .stat-msg.warn { color: #e65100; }
+    .stat-msg.fail { color: #c62828; }
+    .stat-details { font-size: 10px; color: #999; display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
+
+    @media (max-width: 800px) {
+      .sidebar { width: 260px; }
+      .stat-details, .stat-msg { display: none; }
+    }
+
+    /* ── Header action buttons ───────────────── */
+    .header-btn {
+      background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.3);
+      color: #fff; padding: 6px 13px; border-radius: 5px; cursor: pointer;
+      font-size: 12px; font-weight: 600; transition: background .15s; white-space: nowrap;
+    }
+    .header-btn:hover { background: rgba(255,255,255,.3); }
+    .header-actions { margin-left: auto; display: flex; gap: 8px; }
+
+    /* ── Template panel ──────────────────────── */
+    .tpl-panel {
+      position: fixed; top: var(--header-h); right: 0; bottom: var(--status-h);
+      width: 350px; background: #fff; border-left: 2px solid #ddd;
+      box-shadow: -4px 0 20px rgba(0,0,0,.18); z-index: 50;
+      display: flex; flex-direction: column;
+      transform: translateX(100%); transition: transform .25s ease;
+    }
+    .tpl-panel.open { transform: translateX(0); }
+    .tpl-panel-head {
+      background: var(--navy); color: #fff;
+      padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .tpl-panel-head h3 { font-size: 14px; font-weight: 700; }
+    .tpl-panel-close {
+      background: none; border: none; color: rgba(255,255,255,.7);
+      font-size: 22px; cursor: pointer; line-height: 1; padding: 0 2px;
+    }
+    .tpl-panel-close:hover { color: #fff; }
+    .tpl-panel-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+    .tpl-section { display: flex; flex-direction: column; gap: 8px; }
+    .tpl-section-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .8px; color: #aaa;
+    }
+    .tpl-save-row { display: flex; gap: 8px; }
+    .tpl-save-row input {
+      flex: 1; padding: 6px 9px; border: 1px solid #ccc; border-radius: 5px; font-size: 12px;
+    }
+    .tpl-save-row button {
+      background: var(--navy); color: #fff; border: none;
+      padding: 6px 13px; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;
+    }
+    .tpl-save-row button:hover { background: var(--navy-light); }
+    .tpl-item {
+      padding: 9px 11px; background: #f7f7f7; border: 1px solid #e4e4e4; border-radius: 7px;
+    }
+    .tpl-item-row1 { display: flex; align-items: flex-start; gap: 6px; }
+    .tpl-item-info { flex: 1; }
+    .tpl-item-name { font-size: 13px; font-weight: 700; color: #222; }
+    .tpl-item-meta { font-size: 10px; color: #aaa; margin-top: 1px; }
+    .tpl-item-del { background: none; border: none; color: #bbb; cursor: pointer; font-size: 18px; line-height: 1; }
+    .tpl-item-del:hover { color: #c62828; }
+    .tpl-item-apply {
+      margin-top: 7px; width: 100%; padding: 6px; background: var(--navy); color: #fff;
+      border: none; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;
+    }
+    .tpl-item-apply:hover { background: var(--navy-light); }
+    .tpl-io { display: flex; gap: 8px; }
+    .tpl-io button, .tpl-io label {
+      flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 5px;
+      cursor: pointer; font-size: 12px; text-align: center; background: #fafafa; color: #444;
+      font-weight: 500;
+    }
+    .tpl-io button:hover, .tpl-io label:hover { background: #f0f0f0; }
+    .tpl-io input[type="file"] { display: none; }
+    .tpl-note { font-size: 11px; color: #aaa; line-height: 1.5; }
+
+    /* ── Print ───────────────────────────────── */
+    .print-title { display: none; }
+    @media print {
+      .header, .sidebar, .status-bar, .tpl-panel { display: none !important; }
+      .layout { overflow: visible; height: auto; }
+      .cal-area { padding: 0; overflow: visible; }
+      body { height: auto; overflow: visible; background: #fff; }
+      .print-title {
+        display: block; text-align: center;
+        font-size: 20px; font-weight: 700; font-family: Arial, sans-serif;
+        padding: 12px 0 20px; color: #1a237e;
+      }
+      .cal-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 10px !important;
+      }
+      .month-block { break-inside: avoid; box-shadow: none; border: 1px solid #ccc; }
+      .month-head { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .day  { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🏫 School Calendar Builder</h1>
+  <div class="year-nav">
+    <button id="btnPrev" title="Previous year">‹</button>
+    <span class="year-label" id="yearLabel">2026–2027</span>
+    <button id="btnNext" title="Next year">›</button>
+  </div>
+  <div class="header-actions">
+    <button class="header-btn" onclick="toggleTplPanel()">💾 Templates</button>
+    <button class="header-btn" onclick="window.print()">🖨️ Print</button>
+  </div>
+</div>
+
+<!-- ── Template panel ── -->
+<div id="tplPanel" class="tpl-panel">
+  <div class="tpl-panel-head">
+    <h3>📋 Templates</h3>
+    <button class="tpl-panel-close" onclick="closeTplPanel()">×</button>
+  </div>
+  <div class="tpl-panel-body">
+    <div class="tpl-section">
+      <div class="tpl-section-label">Save current settings as template</div>
+      <div class="tpl-save-row">
+        <input type="text" id="tplName" placeholder="Template name…">
+        <button onclick="saveTemplate()">Save</button>
+      </div>
+      <div class="tpl-note">Saves holiday toggles, break dates, and teacher dates. PD days and custom closures are not saved (they're year-specific).</div>
+    </div>
+    <div class="tpl-section">
+      <div class="tpl-section-label">Saved templates</div>
+      <div id="tplList"></div>
+    </div>
+    <div class="tpl-section">
+      <div class="tpl-section-label">Export / Import</div>
+      <div class="tpl-io">
+        <button onclick="exportTemplates()">⬇ Export JSON</button>
+        <label>⬆ Import JSON<input type="file" id="tplImport" accept=".json" onchange="importTemplates(this)"></label>
+      </div>
+      <div class="tpl-note">Export saves all templates to a JSON file you can share or back up. Import merges templates from a file.</div>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- ── Sidebar ── -->
+  <div class="sidebar">
+
+    <!-- School & Staff Dates -->
+    <div class="section">
+      <div class="section-head open" onclick="toggleSection(this)">
+        School &amp; Teacher Dates <span class="chevron">▶</span>
+      </div>
+      <div class="section-body">
+        <div class="sub-label">Students</div>
+        <div class="field"><label>First Day of School</label><input type="date" id="startDate"></div>
+        <div class="field"><label>Last Day of School</label><input type="date" id="endDate"></div>
+        <div class="sub-divider">
+          <div class="sub-label">Teachers</div>
+        </div>
+        <div class="field"><label>Teacher First Day</label><input type="date" id="teacherStart"></div>
+        <div class="field"><label>Teacher Last Day</label><input type="date" id="teacherEnd"></div>
+      </div>
+    </div>
+
+    <!-- Breaks -->
+    <div class="section">
+      <div class="section-head open" onclick="toggleSection(this)">
+        School Breaks <span class="chevron">▶</span>
+      </div>
+      <div class="section-body">
+        <div class="field"><label>Winter Break — Start</label><input type="date" id="winterStart"></div>
+        <div class="field"><label>Winter Break — End</label><input type="date" id="winterEnd"></div>
+        <div class="field"><label>Spring Break — Start</label><input type="date" id="springStart"></div>
+        <div class="field"><label>Spring Break — End</label><input type="date" id="springEnd"></div>
+        <div class="toggle-row" style="margin-top:4px;">
+          <div class="tl"><div class="tl-name">February Break</div></div>
+          <label class="sw"><input type="checkbox" id="hasFeb" onchange="onHasFeb()"><span class="knob"></span></label>
+        </div>
+        <div id="febBreakFields" style="display:none; margin-top:6px;">
+          <div class="field"><label>February Break — Start</label><input type="date" id="febStart"></div>
+          <div class="field"><label>February Break — End</label><input type="date" id="febEnd"></div>
+        </div>
+        <div class="toggle-row" style="margin-top:4px;">
+          <div class="tl"><div class="tl-name">Fall Break</div></div>
+          <label class="sw"><input type="checkbox" id="hasFall" onchange="onHasFall()"><span class="knob"></span></label>
+        </div>
+        <div id="fallBreakFields" style="display:none; margin-top:6px;">
+          <div class="field"><label>Fall Break — Start</label><input type="date" id="fallStart"></div>
+          <div class="field"><label>Fall Break — End</label><input type="date" id="fallEnd"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Federal Holidays -->
+    <div class="section">
+      <div class="section-head open" onclick="toggleSection(this)">
+        Federal Holidays <span class="chevron">▶</span>
+      </div>
+      <div class="section-body" id="fedList"></div>
+    </div>
+
+    <!-- Religious / Cultural -->
+    <div class="section">
+      <div class="section-head" onclick="toggleSection(this)">
+        Religious &amp; Cultural <span class="chevron">▶</span>
+      </div>
+      <div class="section-body hidden" id="relList"></div>
+    </div>
+
+    <!-- PD Days -->
+    <div class="section">
+      <div class="section-head open" onclick="toggleSection(this)">
+        PD Days <span class="chevron">▶</span>
+      </div>
+      <div class="section-body">
+        <div class="pd-list" id="pdList"></div>
+        <button class="btn-add" onclick="openForm('pd')">+ Add PD Day</button>
+        <div id="pdForm" class="add-form" style="display:none;">
+          <div class="field"><label>Date</label><input type="date" id="pdDate"></div>
+          <div class="toggle-row">
+            <div class="tl">
+              <div class="tl-name">Counts as instructional day</div>
+              <div class="tl-date">Up to 5 PD days may count</div>
+            </div>
+            <label class="sw"><input type="checkbox" id="pdInst" checked><span class="knob"></span></label>
+          </div>
+          <div class="add-btns">
+            <button class="btn-confirm" onclick="submitPd()">Add</button>
+            <button class="btn-cancel" onclick="closeForm('pd')">Cancel</button>
+          </div>
+        </div>
+        <div class="pd-note" id="pdNote"></div>
+        <div id="pdWarn" class="warn-box" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- School Closed (District Open) -->
+    <div class="section">
+      <div class="section-head" onclick="toggleSection(this)">
+        School Closed, District Open <span class="chevron">▶</span>
+      </div>
+      <div class="section-body hidden">
+        <div style="font-size:11px;color:#888;margin-bottom:8px;">
+          School buildings closed but the district office is open — staff present, no students (e.g., Clerical Days, Election Days).
+        </div>
+        <div class="cl-list" id="scList"></div>
+        <button class="btn-add" onclick="openForm('sc')" style="background:#c62828;">+ Add Closure</button>
+        <div id="scForm" class="add-form" style="display:none;">
+          <div class="field"><label>Date</label><input type="date" id="scDate"></div>
+          <div class="field"><label>Label (optional)</label><input type="text" id="scLabel" placeholder="e.g. Clerical Day"></div>
+          <div class="toggle-row">
+            <div class="tl"><div class="tl-name">Counts as teacher day</div></div>
+            <label class="sw"><input type="checkbox" id="scCountsForTeachers" checked><span class="knob"></span></label>
+          </div>
+          <div class="add-btns">
+            <button class="btn-confirm" onclick="submitClosure('sc')">Add</button>
+            <button class="btn-cancel" onclick="closeForm('sc')">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- District Closed -->
+    <div class="section">
+      <div class="section-head" onclick="toggleSection(this)">
+        District Closed (All Staff) <span class="chevron">▶</span>
+      </div>
+      <div class="section-body hidden">
+        <div style="font-size:11px;color:#888;margin-bottom:8px;">
+          Entire district closed — no staff or students (e.g., Emergency Closure, Election Day, additional district holidays).
+        </div>
+        <div class="cl-list" id="dcList"></div>
+        <button class="btn-add" onclick="openForm('dc')" style="background:#e65100;">+ Add Closure</button>
+        <div id="dcForm" class="add-form" style="display:none;">
+          <div class="field"><label>Date</label><input type="date" id="dcDate"></div>
+          <div class="field"><label>Label (optional)</label><input type="text" id="dcLabel" placeholder="e.g. Emergency Closure"></div>
+          <div class="add-btns">
+            <button class="btn-confirm" onclick="submitClosure('dc')">Add</button>
+            <button class="btn-cancel" onclick="closeForm('dc')">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend">
+      <div class="legend-title">Legend</div>
+      <div class="legend-item"><div class="swatch" style="background:#fff;border-color:#ddd;"></div>School Day (students + staff)</div>
+      <div class="legend-item"><div class="swatch" style="background:#ffc000;"></div>First / Last Day of School</div>
+      <div class="legend-item"><div class="swatch" style="background:#e0f7fa;border-color:#b2ebf2;"></div>Teachers Only (no students)</div>
+      <div class="legend-item"><div class="swatch" style="background:#ff9800;"></div>Federal Holiday (district closed)</div>
+      <div class="legend-item"><div class="swatch" style="background:#9c27b0;"></div>Religious / Cultural Holiday</div>
+      <div class="legend-item"><div class="swatch" style="background:#42a5f5;"></div>School Break</div>
+      <div class="legend-item"><div class="swatch" style="background:#ef5350;"></div>School Closed, District Open</div>
+      <div class="legend-item"><div class="swatch" style="background:#e65100;"></div>District Closed (custom)</div>
+      <div class="legend-item"><div class="swatch" style="background:#ff80c8;"></div>PD Day (counts as instructional)</div>
+      <div class="legend-item"><div class="swatch" style="background:#ff33cc;"></div>PD Day (not instructional)</div>
+      <div class="legend-item"><div class="swatch" style="background:#efefef;border-color:#ddd;"></div>Weekend</div>
+    </div>
+  </div>
+
+  <!-- ── Calendar area ── -->
+  <div class="cal-area">
+    <div class="print-title" id="printTitle">School Calendar 2026–2027</div>
+    <div class="cal-grid" id="calGrid"></div>
+  </div>
+</div>
+
+<!-- ── Status bar ── -->
+<div class="status-bar">
+  <div class="stat-block">
+    <div class="stat-lbl">Student Days</div>
+    <div class="stat-val" id="sStudentDays">—</div>
+  </div>
+  <div class="stat-block">
+    <div class="stat-lbl">Required</div>
+    <div class="stat-val">180</div>
+  </div>
+  <div class="stat-progress">
+    <div class="prog-bg"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+    <div class="prog-labels"><span>0</span><span>90</span><span>180</span></div>
+  </div>
+  <div class="stat-icon" id="sIcon">—</div>
+  <div class="stat-msg" id="sMsg"></div>
+  <div class="stat-divider"></div>
+  <div class="stat-block">
+    <div class="stat-lbl">Teacher Days</div>
+    <div class="stat-val" id="sTeacherDays">—</div>
+  </div>
+  <div class="stat-details" id="sDetails"></div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════
+const state = {
+  year: 2026,
+  startDate: '', endDate: '',
+  teacherStart: '', teacherEnd: '',
+  winterStart: '', winterEnd: '',
+  springStart: '', springEnd: '',
+  hasFeb: false, febStart: '', febEnd: '',
+  hasFall: false, fallStart: '', fallEnd: '',
+  holidays: {},
+  pdDays: [],           // [{ date, instructional }]
+  schoolClosedDays: [], // [{ date, label }] — school closed, district open
+  districtClosedDays:[], // [{ date, label }] — district closed entirely
+};
+
+// ══════════════════════════════════════════════════════
+//  HOLIDAY DEFINITIONS
+// ══════════════════════════════════════════════════════
+const FED_HOLIDAYS = [
+  { id:'laborDay',      name:'Labor Day',                  desc:'1st Mon in Sep',    on:true  },
+  { id:'columbusDay',   name:'Columbus / Indigenous Day',  desc:'2nd Mon in Oct',    on:false },
+  { id:'veteransDay',   name:'Veterans Day',               desc:'Nov 11 (observed)', on:true  },
+  { id:'thanksgiving',  name:'Thanksgiving',               desc:'4th Thu in Nov',    on:true  },
+  { id:'thanksgivingF', name:'Day After Thanksgiving',     desc:'Fri after Thanks.', on:true  },
+  { id:'christmas',     name:'Christmas Day',              desc:'Dec 25 (observed)', on:true  },
+  { id:'newYears',      name:"New Year's Day",             desc:'Jan 1 (observed)',  on:true  },
+  { id:'mlk',           name:'MLK Jr. Day',                desc:'3rd Mon in Jan',    on:true  },
+  { id:'presidents',    name:"Presidents' Day",            desc:'3rd Mon in Feb',    on:true  },
+  { id:'memorial',      name:'Memorial Day',               desc:'Last Mon in May',   on:true  },
+  { id:'juneteenth',    name:'Juneteenth',                 desc:'Jun 19 (observed)', on:true  },
+];
+const REL_HOLIDAYS = [
+  { id:'goodFriday',    name:'Good Friday',     desc:'2 days before Easter',   on:false },
+  { id:'eidFitr',       name:'Eid al-Fitr',     desc:'End of Ramadan',         on:false },
+  { id:'eidAdha',       name:'Eid al-Adha',     desc:'Islamic feast (2 days)', on:false },
+  { id:'roshHashanah',  name:'Rosh Hashanah',   desc:'Jewish New Year (2d)',   on:false },
+  { id:'yomKippur',     name:'Yom Kippur',      desc:'Day of Atonement',       on:false },
+  { id:'diwali',        name:'Diwali',          desc:'Festival of Lights',     on:false },
+];
+const REL_DATES = {
+  easter:       {2024:'2024-03-31',2025:'2025-04-20',2026:'2026-04-05',2027:'2027-03-28',2028:'2028-04-16',2029:'2029-04-01',2030:'2030-04-21'},
+  eidFitr:      {2024:['2024-04-10'],2025:['2025-03-30'],2026:['2026-03-20'],2027:['2027-03-09'],2028:['2028-02-26'],2029:['2029-02-14'],2030:['2030-02-04']},
+  eidAdha:      {2024:['2024-06-16','2024-06-17'],2025:['2025-06-06','2025-06-07'],2026:['2026-05-27','2026-05-28'],2027:['2027-05-16','2027-05-17'],2028:['2028-05-04','2028-05-05'],2029:['2029-04-24','2029-04-25'],2030:['2030-04-13','2030-04-14']},
+  roshHashanah: {2024:['2024-10-02','2024-10-03'],2025:['2025-09-22','2025-09-23'],2026:['2026-09-11','2026-09-12'],2027:['2027-10-01','2027-10-02'],2028:['2028-09-20','2028-09-21'],2029:['2029-09-09','2029-09-10'],2030:['2030-09-28','2030-09-29']},
+  yomKippur:    {2024:['2024-10-11'],2025:['2025-10-01'],2026:['2026-09-20'],2027:['2027-10-10'],2028:['2028-09-28'],2029:['2029-09-18'],2030:['2030-10-07']},
+  diwali:       {2024:['2024-11-01'],2025:['2025-10-20'],2026:['2026-11-08'],2027:['2027-10-29'],2028:['2028-10-17'],2029:['2029-11-05'],2030:['2030-10-26']},
+};
+const SHORT = {
+  laborDay:'Labor Day', columbusDay:'Columbus', veteransDay:'Veterans',
+  thanksgiving:'Thanksgiving', thanksgivingF:'+1 Thanks.', christmas:'Christmas',
+  newYears:"New Year's", mlk:'MLK Day', presidents:"Presidents'", memorial:'Memorial',
+  juneteenth:'Juneteenth', goodFriday:'Good Friday', eidFitr:'Eid al-Fitr',
+  eidAdha:'Eid al-Adha', roshHashanah:'Rosh H.', yomKippur:'Yom Kippur', diwali:'Diwali',
+};
+
+// ══════════════════════════════════════════════════════
+//  DATE HELPERS
+// ══════════════════════════════════════════════════════
+const ds  = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const fd  = s => { const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); };
+const add = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+
+function nthDow(year, month, dow, n) {
+  let d=new Date(year,month,1), c=0;
+  while(d.getMonth()===month){ if(d.getDay()===dow&&++c===n) return new Date(d); d.setDate(d.getDate()+1); }
+}
+function lastDow(year, month, dow) {
+  let d=new Date(year,month+1,0);
+  while(d.getDay()!==dow) d.setDate(d.getDate()-1);
+  return d;
+}
+function observed(year, month, day) {
+  const d=new Date(year,month,day);
+  return d.getDay()===6?new Date(year,month,day-1):d.getDay()===0?new Date(year,month,day+1):d;
+}
+function fmt(s) { return fd(s).toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
+
+// ══════════════════════════════════════════════════════
+//  BUILD HOLIDAY MAPS  (date -> label)
+// ══════════════════════════════════════════════════════
+function buildHolidayMaps(year) {
+  const y1=year, y2=year+1;
+  const fedMap=new Map(), relMap=new Map();
+  function addF(id,d){ if(d&&state.holidays[id]) fedMap.set(ds(d),SHORT[id]); }
+  function addR(id,arr){ if(!state.holidays[id]) return; (arr||[]).forEach(s=>{ if(s) relMap.set(s,SHORT[id]); }); }
+
+  addF('laborDay',    nthDow(y1,8,1,1));
+  addF('columbusDay', nthDow(y1,9,1,2));
+  addF('veteransDay', observed(y1,10,11));
+  const td=nthDow(y1,10,4,4);
+  addF('thanksgiving',  td);
+  addF('thanksgivingF', td?add(td,1):null);
+  addF('christmas',   observed(y1,11,25));
+  addF('newYears',    observed(y2,0,1));
+  addF('mlk',         nthDow(y2,0,1,3));
+  addF('presidents',  nthDow(y2,1,1,3));
+  addF('memorial',    lastDow(y2,4,1));
+  addF('juneteenth',  observed(y2,5,19));
+
+  if(state.holidays.goodFriday){
+    const es=REL_DATES.easter[y2]||REL_DATES.easter[y1];
+    if(es) relMap.set(ds(add(fd(es),-2)),SHORT.goodFriday);
+  }
+  addR('eidFitr',      [...(REL_DATES.eidFitr[y1]||[]),...(REL_DATES.eidFitr[y2]||[])]);
+  addR('eidAdha',      [...(REL_DATES.eidAdha[y1]||[]),...(REL_DATES.eidAdha[y2]||[])]);
+  addR('roshHashanah', [...(REL_DATES.roshHashanah[y1]||[]),...(REL_DATES.roshHashanah[y2]||[])]);
+  addR('yomKippur',    [...(REL_DATES.yomKippur[y1]||[]),...(REL_DATES.yomKippur[y2]||[])]);
+  addR('diwali',       [...(REL_DATES.diwali[y1]||[]),...(REL_DATES.diwali[y2]||[])]);
+
+  return { fedMap, relMap };
+}
+
+function buildBreakSet() {
+  const s=new Set();
+  function rng(a,b){ if(!a||!b) return; let d=fd(a);const e=fd(b); while(d<=e){s.add(ds(d));d=add(d,1);} }
+  rng(state.winterStart,state.winterEnd);
+  rng(state.springStart,state.springEnd);
+  if(state.hasFeb)  rng(state.febStart, state.febEnd);
+  if(state.hasFall) rng(state.fallStart,state.fallEnd);
+  return s;
+}
+
+function buildClosureMaps() {
+  const scMap=new Map(), dcMap=new Map();
+  state.schoolClosedDays.forEach(({date,label})=>scMap.set(date, label||'School Closed'));
+  state.districtClosedDays.forEach(({date,label})=>dcMap.set(date, label||'Dist. Closed'));
+  return { scMap, dcMap };
+}
+
+// ══════════════════════════════════════════════════════
+//  DAY CLASSIFICATION
+//  Returns { type, label }
+//
+//  Priority:  weekend > PD > school-closed custom >
+//             district-closed custom > break > fed > rel >
+//             staff-only > first/last > school > out
+// ══════════════════════════════════════════════════════
+function classifyDay(dateStr, fedMap, relMap, breakSet, scMap, dcMap) {
+  const inStudent = state.startDate && state.endDate &&
+                    dateStr >= state.startDate && dateStr <= state.endDate;
+  const inTeacher   = state.teacherStart && state.teacherEnd &&
+                    dateStr >= state.teacherStart && dateStr <= state.teacherEnd;
+
+  const d = fd(dateStr);
+  const dow = d.getDay();
+  if (dow===0||dow===6) return { type: inStudent||inTeacher ? 'we' : 'out', label:'' };
+
+  // PD days are checked before the out-of-range guard so they always
+  // appear on the calendar and count regardless of student/teacher windows.
+  const pd = state.pdDays.find(p=>p.date===dateStr);
+  if (pd) return { type: pd.instructional?'pd-yes':'pd-no', label:'PD' };
+
+  if (!inStudent && !inTeacher) return { type:'out', label:'' };
+
+  // School closed (district open)
+  if (scMap.has(dateStr)) return { type:'sch-closed', label:scMap.get(dateStr) };
+
+  // District closed (custom)
+  if (dcMap.has(dateStr)) return { type:'dist-closed', label:dcMap.get(dateStr) };
+
+  // Breaks (district closed)
+  if (breakSet.has(dateStr)) return { type:'break', label:'Break' };
+
+  // Federal / religious holidays (district closed)
+  if (fedMap.has(dateStr)) return { type:'fed', label:fedMap.get(dateStr) };
+  if (relMap.has(dateStr)) return { type:'rel', label:relMap.get(dateStr) };
+
+  // Teacher-only: within teacher range but outside student range
+  if (!inStudent && inTeacher) return { type:'teacher', label:'Teachers' };
+
+  // First / last student day
+  if (dateStr===state.startDate) return { type:'first', label:'First Day' };
+  if (dateStr===state.endDate)   return { type:'last',  label:'Last Day'  };
+
+  return { type:'school', label:'' };
+}
+
+// ══════════════════════════════════════════════════════
+//  COUNT DAYS
+// ══════════════════════════════════════════════════════
+// Types that count as student days: school, first, last, pd-yes, staff (no), sch-closed (no)
+// Types that count as staff days:   school, first, last, pd-yes, pd-no, staff, sch-closed
+// Types that count as neither:      break, fed, rel, dist-closed, we, out
+
+function countDays(fedMap, relMap, breakSet, scMap, dcMap) {
+  let student=0, teacher=0, holidays=0, breaks=0, pdOff=0, teacherOnly=0, schClosed=0, distClosed=0, totalWeekdays=0;
+
+  // Range to iterate: widest of student, teacher, and PD day dates
+  const pdDates = state.pdDays.map(p=>p.date);
+  const allBounds = [state.startDate, state.endDate, state.teacherStart, state.teacherEnd, ...pdDates].filter(Boolean).sort();
+  if (!allBounds.length) return { student:0, teacher:0, holidays:0, breaks:0, pdOff:0, teacherOnly:0, schClosed:0, distClosed:0, totalWeekdays:0 };
+  const rangeStart = allBounds[0];
+  const rangeEnd   = allBounds[allBounds.length-1];
+
+  let d=fd(rangeStart); const end=fd(rangeEnd);
+  while(d<=end){
+    const dstr=ds(d);
+    const dow=d.getDay();
+    if(dow!==0&&dow!==6){
+      const inStudent = state.startDate && state.endDate && dstr>=state.startDate && dstr<=state.endDate;
+      const inTeacher   = state.teacherStart && state.teacherEnd && dstr>=state.teacherStart && dstr<=state.teacherEnd;
+      if(inStudent||inTeacher) totalWeekdays++;
+
+      const { type } = classifyDay(dstr, fedMap, relMap, breakSet, scMap, dcMap);
+      if(type==='school'||type==='first'||type==='last'){
+        if(inStudent) student++;
+        if(inTeacher) teacher++;
+      } else if(type==='pd-yes'){
+        student++;  // Michigan law: instructional PD days count regardless of student date range
+        teacher++;  // always counts for teachers too
+      } else if(type==='pd-no'){
+        pdOff++;    // never counts toward student days
+        teacher++;  // always counts for teachers
+      } else if(type==='teacher'){
+        teacherOnly++;
+        if(inTeacher) teacher++;
+      } else if(type==='sch-closed'){
+        schClosed++;
+        const scDay=state.schoolClosedDays.find(c=>c.date===dstr);
+        if(inTeacher && scDay && scDay.countsForTeachers) teacher++;
+      } else if(type==='fed'||type==='rel'){
+        holidays++;
+      } else if(type==='break'){
+        breaks++;
+      } else if(type==='dist-closed'){
+        distClosed++;
+      }
+    }
+    d=add(d,1);
+  }
+  return { student, teacher, holidays, breaks, pdOff, teacherOnly, schClosed, distClosed, totalWeekdays };
+}
+
+// ══════════════════════════════════════════════════════
+//  RENDER CALENDAR
+// ══════════════════════════════════════════════════════
+const MONTH_NAMES=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DOW_LABELS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function render() {
+  const grid=document.getElementById('calGrid');
+  const pdDates=state.pdDays.map(p=>p.date);
+  const allBounds=[state.startDate,state.endDate,state.teacherStart,state.teacherEnd,...pdDates].filter(Boolean).sort();
+  const rangeStart=allBounds[0], rangeEnd=allBounds[allBounds.length-1];
+
+  if(!rangeStart||!rangeEnd){
+    grid.innerHTML='<p style="color:#bbb;padding:32px;font-size:14px;">Set school dates to view the calendar.</p>';
+    updateStatus(null); return;
+  }
+
+  const {fedMap,relMap}=buildHolidayMaps(state.year);
+  const breakSet=buildBreakSet();
+  const {scMap,dcMap}=buildClosureMaps();
+  const counts=countDays(fedMap,relMap,breakSet,scMap,dcMap);
+
+  const sd=fd(rangeStart), ed=fd(rangeEnd);
+  let y=sd.getFullYear(), m=sd.getMonth();
+  const ey=ed.getFullYear(), em=ed.getMonth();
+
+  grid.innerHTML='';
+  while(y<ey||(y===ey&&m<=em)){
+    grid.appendChild(renderMonth(y,m,fedMap,relMap,breakSet,scMap,dcMap));
+    if(++m>11){m=0;y++;}
+  }
+  updateStatus(counts);
+  document.getElementById('printTitle').textContent =
+    `School Calendar ${state.year}–${state.year+1}`;
+}
+
+function renderMonth(year, month, fedMap, relMap, breakSet, scMap, dcMap) {
+  const dim=new Date(year,month+1,0).getDate();
+  let mStudent=0, mTeacher=0;
+  for(let d=1;d<=dim;d++){
+    const dstr=ds(new Date(year,month,d));
+    const {type}=classifyDay(dstr,fedMap,relMap,breakSet,scMap,dcMap);
+    const inStu=state.startDate&&state.endDate&&dstr>=state.startDate&&dstr<=state.endDate;
+    const inTch=state.teacherStart&&state.teacherEnd&&dstr>=state.teacherStart&&dstr<=state.teacherEnd;
+    if(type==='school'||type==='first'||type==='last'){
+      if(inStu) mStudent++;
+      if(inTch) mTeacher++;
+    } else if(type==='pd-yes'){
+      mStudent++;   // always counts (Michigan law)
+      mTeacher++;
+    } else if(type==='pd-no'){
+      mTeacher++;   // teachers only
+    } else if(type==='teacher'){
+      if(inTch) mTeacher++;
+    } else if(type==='sch-closed'){
+      const scDay=state.schoolClosedDays.find(c=>c.date===dstr);
+      if(inTch&&scDay&&scDay.countsForTeachers) mTeacher++;
+    }
+  }
+
+  const showTeacher = state.teacherStart && state.teacherEnd;
+  const countLine = showTeacher
+    ? `<div class="month-count-line">${mStudent} student</div><div class="month-count-line">${mTeacher} staff</div>`
+    : `<div class="month-count-line">${mStudent} student day${mStudent!==1?'s':''}</div>`;
+
+  const block=document.createElement('div');
+  block.className='month-block';
+  block.innerHTML=`
+    <div class="month-head">
+      <span class="month-name">${MONTH_NAMES[month]} ${year}</span>
+      <div class="month-counts">${countLine}</div>
+    </div>
+    <div class="month-body">
+      <div class="dow-row">${DOW_LABELS.map((l,i)=>`<div class="dow-cell${i===0||i===6?' we':''}">${l}</div>`).join('')}</div>
+      <div class="dates-row" id="dr-${year}-${month}"></div>
+    </div>`;
+
+  const datesRow=block.querySelector(`#dr-${year}-${month}`);
+  const firstDow=new Date(year,month,1).getDay();
+  for(let i=0;i<firstDow;i++){
+    const c=document.createElement('div'); c.className='day d-empty'; datesRow.appendChild(c);
+  }
+  for(let d=1;d<=dim;d++){
+    const dstr=ds(new Date(year,month,d));
+    const {type,label}=classifyDay(dstr,fedMap,relMap,breakSet,scMap,dcMap);
+    const cell=document.createElement('div');
+    cell.className=`day d-${type}`;
+    cell.title=label||dstr;
+    const sl=label.length>8?label.slice(0,7)+'…':label;
+    cell.innerHTML=`<span class="dn">${d}</span>${label?`<span class="dl">${sl}</span>`:''}`;
+    datesRow.appendChild(cell);
+  }
+  return block;
+}
+
+// ══════════════════════════════════════════════════════
+//  STATUS BAR
+// ══════════════════════════════════════════════════════
+function updateStatus(counts) {
+  const sdEl=document.getElementById('sStudentDays');
+  const sfEl=document.getElementById('sTeacherDays');
+  const fill=document.getElementById('progFill');
+  const icon=document.getElementById('sIcon');
+  const msg =document.getElementById('sMsg');
+  const det =document.getElementById('sDetails');
+
+  if(!counts){
+    sdEl.textContent='—'; sfEl.textContent='—';
+    fill.style.width='0%'; icon.textContent='—'; msg.textContent=''; det.innerHTML='';
+    return;
+  }
+  const { student, teacher, holidays, breaks, pdOff, schClosed, distClosed } = counts;
+  sdEl.textContent=student;
+  sfEl.textContent=state.teacherStart&&state.teacherEnd ? teacher : '—';
+
+  const pct=Math.min(100,student/180*100);
+  fill.style.width=pct+'%';
+
+  if(student>=180){
+    sdEl.className='stat-val pass'; fill.className='prog-fill';
+    icon.textContent='✅';
+    msg.textContent=`Passes — ${student-180} day${student-180!==1?'s':''} above min`;
+    msg.className='stat-msg pass';
+  } else if(student>=170){
+    sdEl.className='stat-val warn'; fill.className='prog-fill warn';
+    icon.textContent='⚠️';
+    msg.textContent=`${180-student} day${180-student!==1?'s':''} short of 180`;
+    msg.className='stat-msg warn';
+  } else {
+    sdEl.className='stat-val fail'; fill.className='prog-fill fail';
+    icon.textContent='❌';
+    msg.textContent=`Fails — need ${180-student} more day${180-student!==1?'s':''}`;
+    msg.className='stat-msg fail';
+  }
+
+  const instPd=state.pdDays.filter(p=>p.instructional).length;
+  det.innerHTML=`
+    <span>Holidays: ${holidays} | Breaks: ${breaks}</span>
+    <span>PD (no students): ${pdOff} | School closed: ${schClosed}</span>
+    <span>Dist. closed (custom): ${distClosed} | PD instructional: ${instPd}/5</span>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  SIDEBAR: HOLIDAY TOGGLES
+// ══════════════════════════════════════════════════════
+function buildHolidayToggles() {
+  const y1=state.year, y2=state.year+1;
+  function makeRow(h) {
+    const savedH=state.holidays;
+    state.holidays={...savedH,[h.id]:true};
+    const {fedMap,relMap}=buildHolidayMaps(state.year);
+    state.holidays=savedH;
+    const allDates=new Set([...fedMap.keys(),...relMap.keys()]);
+    const inYr=[...allDates].filter(s=>(!state.startDate||s>=state.startDate)&&(!state.endDate||s<=state.endDate)).sort();
+    const hint=inYr.length?inYr.map(fmt).join(', '):h.desc;
+    const row=document.createElement('div');
+    row.className='toggle-row';
+    row.innerHTML=`
+      <div class="tl">
+        <div class="tl-name">${h.name}</div>
+        <div class="tl-date">${hint}</div>
+      </div>
+      <label class="sw"><input type="checkbox" ${state.holidays[h.id]?'checked':''}><span class="knob"></span></label>`;
+    row.querySelector('input').addEventListener('change',e=>{
+      state.holidays[h.id]=e.target.checked;
+      buildHolidayToggles(); render();
+    });
+    return row;
+  }
+  const fedEl=document.getElementById('fedList');
+  const relEl=document.getElementById('relList');
+  fedEl.innerHTML=''; relEl.innerHTML='';
+  FED_HOLIDAYS.forEach(h=>fedEl.appendChild(makeRow(h)));
+  REL_HOLIDAYS.forEach(h=>relEl.appendChild(makeRow(h)));
+}
+
+// ══════════════════════════════════════════════════════
+//  SIDEBAR: PD DAYS
+// ══════════════════════════════════════════════════════
+function renderPdList() {
+  const list=document.getElementById('pdList');
+  const note=document.getElementById('pdNote');
+  const warn=document.getElementById('pdWarn');
+  const instCount=state.pdDays.filter(p=>p.instructional).length;
+
+  list.innerHTML='';
+  if(state.pdDays.length===0) { list.innerHTML='<div class="empty-msg">No PD days added</div>'; }
+
+  state.pdDays.forEach((pd,i)=>{
+    const label=fd(pd.date).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+    const canCheck=pd.instructional||instCount<5;
+    const item=document.createElement('div'); item.className='pd-item';
+    item.innerHTML=`
+      <div class="pd-info">
+        <div class="pd-date">${label}</div>
+        <label class="pd-check">
+          <input type="checkbox" data-i="${i}" class="pd-icb" ${pd.instructional?'checked':''} ${!canCheck?'disabled':''}>
+          Counts as instructional
+        </label>
+      </div>
+      <button class="pd-del" data-i="${i}">×</button>`;
+    list.appendChild(item);
+  });
+  list.querySelectorAll('.pd-del').forEach(btn=>{
+    btn.addEventListener('click',()=>{ state.pdDays.splice(+btn.dataset.i,1); renderPdList(); render(); });
+  });
+  list.querySelectorAll('.pd-icb').forEach(cb=>{
+    cb.addEventListener('change',e=>{
+      const idx=+e.target.dataset.i;
+      if(e.target.checked&&state.pdDays.filter(p=>p.instructional).length>=5){
+        e.target.checked=false;
+        warn.style.display='block';
+        warn.textContent='Max 5 PD days can count as instructional.';
+        setTimeout(()=>warn.style.display='none',3000);
+        return;
+      }
+      state.pdDays[idx].instructional=e.target.checked;
+      renderPdList(); render();
+    });
+  });
+  note.textContent=`${instCount}/5 PD days marked as instructional`;
+  warn.style.display='none';
+}
+
+// ══════════════════════════════════════════════════════
+//  SIDEBAR: CUSTOM CLOSURES (School Closed / District Closed)
+// ══════════════════════════════════════════════════════
+function renderClosureList(type) {
+  const key = type==='sc' ? 'schoolClosedDays' : 'districtClosedDays';
+  const list = document.getElementById(type+'List');
+  const items = state[key];
+
+  list.innerHTML='';
+  if(items.length===0){ list.innerHTML='<div class="empty-msg">None added</div>'; return; }
+
+  items.forEach((item, i)=>{
+    const {date, label, countsForTeachers} = item;
+    const dateLabel=fd(date).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+    const el=document.createElement('div');
+    el.className=`cl-item ${type}`;
+    el.innerHTML=`
+      <div class="cl-info">
+        <div class="cl-date-lbl">${dateLabel}</div>
+        ${label?`<div class="cl-user-lbl">${label}</div>`:''}
+        ${type==='sc'?`<label class="pd-check" style="margin-top:3px;">
+          <input type="checkbox" class="sc-tcb" data-i="${i}" ${countsForTeachers?'checked':''}>
+          Counts as teacher day
+        </label>`:''}
+      </div>
+      <button class="cl-del" data-type="${type}" data-i="${i}">×</button>`;
+    list.appendChild(el);
+  });
+
+  list.querySelectorAll('.cl-del').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const t=btn.dataset.type, k=t==='sc'?'schoolClosedDays':'districtClosedDays';
+      state[k].splice(+btn.dataset.i,1);
+      renderClosureList(t); render();
+    });
+  });
+  list.querySelectorAll('.sc-tcb').forEach(cb=>{
+    cb.addEventListener('change',e=>{
+      state.schoolClosedDays[+e.target.dataset.i].countsForTeachers=e.target.checked;
+      render();
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════════
+//  FORM OPEN / CLOSE / SUBMIT
+// ══════════════════════════════════════════════════════
+function openForm(type) {
+  document.getElementById(type+'Form').style.display='block';
+  // Prefill date
+  const dateEl=document.getElementById(type+'Date');
+  if(!dateEl.value){
+    const def=state.startDate||state.teacherStart||'';
+    if(def) dateEl.value=def;
+  }
+}
+function closeForm(type) {
+  document.getElementById(type+'Form').style.display='none';
+}
+
+function submitPd() {
+  const dateVal=document.getElementById('pdDate').value;
+  const isInst=document.getElementById('pdInst').checked;
+  const warn=document.getElementById('pdWarn');
+  if(!dateVal){alert('Select a date.');return;}
+  if(!state.startDate&&!state.teacherStart){alert('Set school or teacher dates first.');return;}
+  const dow=fd(dateVal).getDay();
+  if(dow===0||dow===6){alert('PD days must be on weekdays.');return;}
+  if(state.pdDays.some(p=>p.date===dateVal)){alert('That date is already a PD day.');return;}
+  if(isInst&&state.pdDays.filter(p=>p.instructional).length>=5){
+    alert('Max 5 PD days can count as instructional.');return;
+  }
+  state.pdDays.push({date:dateVal,instructional:isInst});
+  state.pdDays.sort((a,b)=>a.date.localeCompare(b.date));
+  document.getElementById('pdDate').value='';
+  closeForm('pd'); renderPdList(); render();
+}
+
+function submitClosure(type) {
+  const dateVal=document.getElementById(type+'Date').value;
+  const labelVal=document.getElementById(type+'Label').value.trim();
+  if(!dateVal){alert('Select a date.');return;}
+  const dow=fd(dateVal).getDay();
+  if(dow===0||dow===6){alert('Please select a weekday.');return;}
+  const key=type==='sc'?'schoolClosedDays':'districtClosedDays';
+  if(state[key].some(c=>c.date===dateVal)){alert('That date is already added.');return;}
+  const entry={date:dateVal,label:labelVal};
+  if(type==='sc') entry.countsForTeachers=document.getElementById('scCountsForTeachers').checked;
+  state[key].push(entry);
+  state[key].sort((a,b)=>a.date.localeCompare(b.date));
+  document.getElementById(type+'Date').value='';
+  document.getElementById(type+'Label').value='';
+  closeForm(type); renderClosureList(type); render();
+}
+
+// ══════════════════════════════════════════════════════
+//  YEAR NAVIGATION & DEFAULTS
+// ══════════════════════════════════════════════════════
+function setDefaultDates(y) {
+  let s=new Date(y,7,25);
+  while(s.getDay()===0||s.getDay()===6) s=add(s,1);
+  state.startDate=ds(s);
+
+  // Staff starts 5 weekdays before students
+  let sf=new Date(s); let wdCount=0;
+  while(wdCount<5){ sf=add(sf,-1); if(sf.getDay()!==0&&sf.getDay()!==6) wdCount++; }
+  state.teacherStart=ds(sf);
+
+  let e=new Date(y+1,5,13);
+  while(e.getDay()!==5) e=add(e,-1);
+  state.endDate=ds(e);
+  state.teacherEnd=ds(e); // same as last student day by default
+
+  state.winterStart=`${y}-12-22`; state.winterEnd=`${y+1}-01-02`;
+  let sp=new Date(y+1,3,1); while(sp.getDay()!==1) sp=add(sp,1);
+  state.springStart=ds(sp); state.springEnd=ds(add(sp,4));
+  state.hasFeb=false; state.febStart=''; state.febEnd='';
+  state.hasFall=false; state.fallStart=''; state.fallEnd='';
+}
+
+function syncInputs() {
+  const ids=['startDate','endDate','teacherStart','teacherEnd',
+             'winterStart','winterEnd','springStart','springEnd',
+             'febStart','febEnd','fallStart','fallEnd'];
+  ids.forEach(id=>{ const el=document.getElementById(id); if(el) el.value=state[id]||''; });
+  document.getElementById('hasFeb').checked=state.hasFeb;
+  document.getElementById('febBreakFields').style.display=state.hasFeb?'block':'none';
+  document.getElementById('hasFall').checked=state.hasFall;
+  document.getElementById('fallBreakFields').style.display=state.hasFall?'block':'none';
+}
+
+function changeYear(y) {
+  state.year=y;
+  document.getElementById('yearLabel').textContent=`${y}–${y+1}`;
+  state.pdDays=[]; state.schoolClosedDays=[]; state.districtClosedDays=[];
+  setDefaultDates(y); syncInputs();
+  buildHolidayToggles(); renderPdList();
+  renderClosureList('sc'); renderClosureList('dc');
+  render();
+}
+
+document.getElementById('btnPrev').addEventListener('click',()=>changeYear(state.year-1));
+document.getElementById('btnNext').addEventListener('click',()=>changeYear(state.year+1));
+
+// ══════════════════════════════════════════════════════
+//  DATE INPUT LISTENERS
+// ══════════════════════════════════════════════════════
+['startDate','endDate','teacherStart','teacherEnd',
+ 'winterStart','winterEnd','springStart','springEnd',
+ 'febStart','febEnd','fallStart','fallEnd'
+].forEach(id=>{
+  const el=document.getElementById(id);
+  if(el) el.addEventListener('change',()=>{ state[id]=el.value||''; buildHolidayToggles(); render(); });
+});
+
+function onHasFeb() {
+  state.hasFeb=document.getElementById('hasFeb').checked;
+  document.getElementById('febBreakFields').style.display=state.hasFeb?'block':'none';
+  render();
+}
+function onHasFall() {
+  state.hasFall=document.getElementById('hasFall').checked;
+  document.getElementById('fallBreakFields').style.display=state.hasFall?'block':'none';
+  render();
+}
+
+// ══════════════════════════════════════════════════════
+//  TEMPLATES
+// ══════════════════════════════════════════════════════
+const TPL_KEY = 'schoolCalTemplates';
+
+function getTemplates() {
+  try { return JSON.parse(localStorage.getItem(TPL_KEY)||'[]'); } catch { return []; }
+}
+function saveTemplatesStore(t) { localStorage.setItem(TPL_KEY, JSON.stringify(t)); }
+
+function captureTemplate() {
+  return {
+    holidays:     {...state.holidays},
+    hasFall:      state.hasFall,
+    hasFeb:       state.hasFeb,
+    startDate:    state.startDate,    endDate:      state.endDate,
+    teacherStart: state.teacherStart, teacherEnd:   state.teacherEnd,
+    winterStart:  state.winterStart,  winterEnd:    state.winterEnd,
+    springStart:  state.springStart,  springEnd:    state.springEnd,
+    fallStart:    state.fallStart,    fallEnd:      state.fallEnd,
+    febStart:     state.febStart,     febEnd:       state.febEnd,
+    templateYear: state.year,
+  };
+}
+
+function applyTemplate(tpl) {
+  const offset = state.year - tpl.templateYear;
+  function shift(d) {
+    if (!d) return '';
+    const [y,m,day] = d.split('-').map(Number);
+    return ds(new Date(y + offset, m - 1, day));
+  }
+  state.holidays     = {...tpl.holidays};
+  state.hasFall      = tpl.hasFall;
+  state.hasFeb       = tpl.hasFeb;
+  state.startDate    = shift(tpl.startDate);
+  state.endDate      = shift(tpl.endDate);
+  state.teacherStart = shift(tpl.teacherStart);
+  state.teacherEnd   = shift(tpl.teacherEnd);
+  state.winterStart  = shift(tpl.winterStart);
+  state.winterEnd    = shift(tpl.winterEnd);
+  state.springStart  = shift(tpl.springStart);
+  state.springEnd    = shift(tpl.springEnd);
+  state.fallStart    = tpl.hasFall ? shift(tpl.fallStart) : '';
+  state.fallEnd      = tpl.hasFall ? shift(tpl.fallEnd)   : '';
+  state.febStart     = tpl.hasFeb  ? shift(tpl.febStart)  : '';
+  state.febEnd       = tpl.hasFeb  ? shift(tpl.febEnd)    : '';
+  state.pdDays = []; state.schoolClosedDays = []; state.districtClosedDays = [];
+}
+
+function saveTemplate() {
+  const name = document.getElementById('tplName').value.trim();
+  if (!name) { alert('Enter a template name.'); return; }
+  const all = getTemplates();
+  const idx = all.findIndex(t => t.name === name);
+  const tpl = { name, ...captureTemplate() };
+  if (idx >= 0) {
+    if (!confirm(`Replace existing template "${name}"?`)) return;
+    all[idx] = tpl;
+  } else {
+    all.push(tpl);
+  }
+  saveTemplatesStore(all);
+  document.getElementById('tplName').value = '';
+  renderTemplateList();
+}
+
+function deleteTemplate(name) {
+  if (!confirm(`Delete template "${name}"?`)) return;
+  saveTemplatesStore(getTemplates().filter(t => t.name !== name));
+  renderTemplateList();
+}
+
+function loadTemplate(name) {
+  const tpl = getTemplates().find(t => t.name === name);
+  if (!tpl) return;
+  applyTemplate(tpl);
+  syncInputs();
+  buildHolidayToggles();
+  renderPdList();
+  renderClosureList('sc');
+  renderClosureList('dc');
+  render();
+  closeTplPanel();
+}
+
+function exportTemplates() {
+  const blob = new Blob([JSON.stringify(getTemplates(), null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'school-calendar-templates.json';
+  a.click();
+}
+
+function importTemplates(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (!Array.isArray(imported)) throw new Error();
+      const all = getTemplates();
+      let added = 0, replaced = 0;
+      imported.forEach(tpl => {
+        if (!tpl.name || !tpl.holidays) return;
+        const idx = all.findIndex(t => t.name === tpl.name);
+        if (idx >= 0) { all[idx] = tpl; replaced++; } else { all.push(tpl); added++; }
+      });
+      saveTemplatesStore(all);
+      renderTemplateList();
+      alert(`Imported: ${added} new, ${replaced} updated.`);
+    } catch { alert('Invalid template file.'); }
+    input.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function renderTemplateList() {
+  const list = document.getElementById('tplList');
+  const all = getTemplates();
+  if (all.length === 0) {
+    list.innerHTML = '<div class="empty-msg">No templates saved yet</div>'; return;
+  }
+  list.innerHTML = '';
+  all.forEach(tpl => {
+    const y = tpl.templateYear;
+    const el = document.createElement('div');
+    el.className = 'tpl-item';
+    el.innerHTML = `
+      <div class="tpl-item-row1">
+        <div class="tpl-item-info">
+          <div class="tpl-item-name">${tpl.name}</div>
+          <div class="tpl-item-meta">Based on ${y}–${y+1}</div>
+        </div>
+        <button class="tpl-item-del" data-name="${tpl.name}" title="Delete">×</button>
+      </div>
+      <button class="tpl-item-apply" data-name="${tpl.name}">Apply to ${state.year}–${state.year+1}</button>`;
+    list.appendChild(el);
+  });
+  list.querySelectorAll('.tpl-item-apply').forEach(b =>
+    b.addEventListener('click', () => loadTemplate(b.dataset.name)));
+  list.querySelectorAll('.tpl-item-del').forEach(b =>
+    b.addEventListener('click', () => deleteTemplate(b.dataset.name)));
+}
+
+function toggleTplPanel() {
+  document.getElementById('tplPanel').classList.contains('open') ? closeTplPanel() : openTplPanel();
+}
+function openTplPanel()  { document.getElementById('tplPanel').classList.add('open'); renderTemplateList(); }
+function closeTplPanel() { document.getElementById('tplPanel').classList.remove('open'); }
+
+// ══════════════════════════════════════════════════════
+//  SECTION TOGGLE
+// ══════════════════════════════════════════════════════
+function toggleSection(head) {
+  const body=head.nextElementSibling;
+  const open=head.classList.contains('open');
+  if(open){ head.classList.remove('open'); body.classList.add('hidden'); }
+  else    { head.classList.add('open');    body.classList.remove('hidden'); }
+}
+
+// ══════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════
+function init() {
+  FED_HOLIDAYS.forEach(h=>state.holidays[h.id]=h.on);
+  REL_HOLIDAYS.forEach(h=>state.holidays[h.id]=h.on);
+  setDefaultDates(state.year);
+  syncInputs();
+  buildHolidayToggles();
+  renderPdList();
+  renderClosureList('sc');
+  renderClosureList('dc');
+  renderTemplateList();
+  render();
+}
+init();
+</script>
+</body>
+</html>
