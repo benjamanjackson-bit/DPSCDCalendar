@@ -1,2 +1,2 @@
 # DPSCDCalendar
-Used to create calendar templates for 
+Used to create calendar templates
